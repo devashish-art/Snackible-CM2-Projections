@@ -268,12 +268,11 @@ function toast(msg, type='ok') {
 }
 
 async function saveLocal() {
-  // Only persist ov (per-SKU overrides) — pulled data is always re-pulled fresh
   try {
-    const payload = encodeURIComponent(JSON.stringify({ ov }));
+    const payload = encodeURIComponent(JSON.stringify({ ov, pulled, selectedMonths: Object.fromEntries(Object.entries(selectedMonths).map(([k,v])=>[k,[...v]])) }));
     await fetch(SHEET_URL + '?action=saveOv&payload=' + payload, { cache: 'no-store' });
   } catch(e) {
-    try { localStorage.setItem(STORE, JSON.stringify({ ov })); } catch(e2) {}
+    try { localStorage.setItem(STORE, JSON.stringify({ ov, pulled, selectedMonths: Object.fromEntries(Object.entries(selectedMonths).map(([k,v])=>[k,[...v]])) })); } catch(e2) {}
   }
 }
 async function loadLocal() {
@@ -281,10 +280,22 @@ async function loadLocal() {
     const res = await fetch(SHEET_URL + '?action=loadOv', { cache: 'no-store' });
     const r   = await res.json();
     if (r.ov) ov = r.ov;
+    if (r.pulled) pulled = r.pulled;
+    if (r.selectedMonths) {
+      Object.keys(r.selectedMonths).forEach(k => {
+        selectedMonths[k] = new Set(r.selectedMonths[k] || []);
+      });
+    }
   } catch(e) {
     try {
       const r = JSON.parse(localStorage.getItem(STORE)||'{}');
       if (r.ov) ov = r.ov;
+      if (r.pulled) pulled = r.pulled;
+      if (r.selectedMonths) {
+        Object.keys(r.selectedMonths).forEach(k => {
+          selectedMonths[k] = new Set(r.selectedMonths[k] || []);
+        });
+      }
     } catch(e2) {}
   }
 }
