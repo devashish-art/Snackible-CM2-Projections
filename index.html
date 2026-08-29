@@ -685,12 +685,12 @@ async function loadSaved() {
     const allData = r.data || {};
     const rebuilt = {};
     Object.keys(allData).forEach(key => {
-      if (!key.startsWith('proj|||')) return;
-      const withoutPrefix = key.slice(7); // remove 'proj|||'
-      const sepIdx = withoutPrefix.lastIndexOf('|||');
+      if (!key.startsWith('projchunk-')) return;
+      const withoutPrefix = key.slice(10); // remove 'projchunk-'
+      const sepIdx = withoutPrefix.lastIndexOf('-');
       if (sepIdx < 0) return;
-      const versionKey = withoutPrefix.slice(0, sepIdx);
-      const portal     = withoutPrefix.slice(sepIdx + 3);
+      const versionKey = decodeURIComponent(withoutPrefix.slice(0, sepIdx));
+      const portal     = withoutPrefix.slice(sepIdx + 1);
       const chunk      = allData[key];
       if (!rebuilt[versionKey]) {
         rebuilt[versionKey] = { month: chunk.month, label: chunk.label, portals: {}, savedAt: chunk.savedAt };
@@ -717,13 +717,27 @@ async function writeSaved() {
       const proj = savedProjections[versionKey];
       Object.keys(proj.portals || {}).forEach(portal => {
         // Use ||| as separator to avoid conflict with __ in versionKey
-        const chunkKey = 'proj|||' + versionKey + '|||' + portal;
+        const chunkKey = 'projchunk-' + encodeURIComponent(versionKey) + '-' + portal;
+        // Save only aggregated totals — skus array is too large for URL
+        const snap = proj.portals[portal];
         const chunkData = {
           month: proj.month,
           label: proj.label,
           savedAt: proj.savedAt,
           portal,
-          portalSnap: proj.portals[portal]
+          portalSnap: {
+            gmv:    snap.gmv    || 0,
+            ns:     snap.ns     || 0,
+            cogs:   snap.cogs   || 0,
+            de:     snap.de     || 0,
+            gm:     snap.gm     || 0,
+            lab:    snap.lab    || 0,
+            log:    snap.log    || 0,
+            cm1:    snap.cm1    || 0,
+            promos: snap.promos || 0,
+            ads:    snap.ads    || 0,
+            cm2:    snap.cm2    || 0,
+          }
         };
         const payload = encodeURIComponent(JSON.stringify(chunkData));
         saves.push(fetch(SHEET_URL + '?action=saveChunk&chunkKey=' + encodeURIComponent(chunkKey) + '&payload=' + payload, { cache: 'no-store' }));
