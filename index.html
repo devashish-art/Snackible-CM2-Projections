@@ -949,7 +949,6 @@ function renderCombined() {
   [...window._combSel].forEach(m => { if (!savedProjections[m]) window._combSel.delete(m); });
   if (!window._combSel.size) window._combSel = new Set([savedMonths[savedMonths.length-1]]);
 
-  // Group vKeys by calendar month
   const monthGroups = {};
   savedMonths.forEach(vk => {
     const m = savedProjections[vk].month;
@@ -959,24 +958,18 @@ function renderCombined() {
 
   const dropdowns = Object.entries(monthGroups).map(([month, vks]) => {
     const selVk = vks.find(vk => window._combSel.has(vk));
-    const selLabel = selVk ? (savedProjections[selVk].label || 'No label') : '';
+    const isActive = !!selVk;
     const options = vks.map(vk => {
       const lbl = savedProjections[vk].label || vk;
       const isSel = window._combSel.has(vk);
-      return `<div onclick="toggleCombMonth('${vk}')" style="padding:8px 14px;cursor:pointer;font-size:12px;font-weight:600;color:${isSel?'var(--green)':'var(--tx2)'};background:${isSel?'rgba(2,81,79,.06)':'#fff'};border-bottom:1px solid var(--border);">${lbl}</div>`;
+      return `<div onclick="toggleCombMonth('${vk}')" style="padding:9px 16px;cursor:pointer;font-size:12px;font-weight:600;color:${isSel?'var(--green)':'var(--tx2)'};background:${isSel?'rgba(2,81,79,.06)':'#fff'};border-bottom:1px solid var(--border);">${lbl}</div>`;
     }).join('');
-    const borderCol = selVk ? 'var(--green)' : 'var(--border)';
-    const textCol = selVk ? 'var(--green)' : 'var(--tx2)';
-    const btnLabel = selVk ? `${month} · ${selLabel} ▾` : `${month} ▾`;
-    return `<div style="position:relative;display:inline-block;margin-right:8px;" class="comb-dd-wrap">
-      <div onclick="event.stopPropagation();this.nextElementSibling.style.display=this.nextElementSibling.style.display==='block'?'none':'block'" style="padding:5px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;border:1.5px solid ${borderCol};color:${textCol};background:#fff;user-select:none;">${btnLabel}</div>
-      <div style="display:none;position:absolute;top:110%;left:0;z-index:99;background:#fff;border:1.5px solid var(--border);border-radius:10px;overflow:hidden;min-width:160px;box-shadow:0 4px 16px rgba(0,0,0,.10);">${options}</div>
-    </div>`;
+    return `<div style="position:relative;display:inline-block;" class="comb-dd-wrap"><div onclick="event.stopPropagation();document.querySelectorAll('.comb-dd-wrap .dd-menu').forEach(d=>d.style.display='none');this.nextElementSibling.style.display=this.nextElementSibling.style.display==='block'?'none':'block'" style="padding:6px 16px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;border:1.5px solid ${isActive?'var(--green)':'var(--border)'};color:${isActive?'var(--green)':'var(--tx2)'};background:#fff;user-select:none;display:flex;align-items:center;gap:6px;">${month} Projection <span style="font-size:10px;">&#9660;</span></div><div class="dd-menu" style="display:none;position:absolute;top:110%;left:0;z-index:99;background:#fff;border:1.5px solid var(--border);border-radius:10px;overflow:hidden;min-width:170px;box-shadow:0 4px 16px rgba(0,0,0,.10);">${options}</div></div>`;
   }).join('');
 
   const selMonths = [...window._combSel];
   if (!selMonths.length) {
-    area.innerHTML = `<div class="card" style="margin-bottom:16px"><div class="slbl">Select Saved Projection</div><div style="display:flex;flex-wrap:wrap;gap:8px;">${dropdowns}</div></div><div class="card empty-state"><div class="ei">📊</div><div>Select a projection above.</div></div>`;
+    area.innerHTML = `<div class="card" style="margin-bottom:16px"><div class="slbl">Select Saved Projection</div><div style="display:flex;flex-wrap:wrap;gap:10px;">${dropdowns}</div></div><div class="card empty-state"><div class="ei">&#128202;</div><div>Select a projection above.</div></div>`;
     return;
   }
 
@@ -1042,7 +1035,7 @@ function renderCombined() {
   area.innerHTML = `
     <div class="card" style="margin-bottom:16px">
       <div class="slbl">Select Saved Projection Months to Combine</div>
-      <div style="display:flex;flex-wrap:wrap;gap:8px;">${dropdowns}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;">${dropdowns}</div>
     </div>
     <div class="card tcard" style="padding:0">
       <div class="thead-row">
@@ -1086,11 +1079,11 @@ function renderCombined() {
 
 function toggleCombMonth(m) {
   window._combSel = new Set([m]);
-  document.querySelectorAll('.comb-dd-wrap div:last-child').forEach(d => d.style.display = 'none');
+  document.querySelectorAll('.comb-dd-wrap .dd-menu').forEach(d => d.style.display = 'none');
   renderCombined();
 }
 document.addEventListener('click', () => {
-  document.querySelectorAll('.comb-dd-wrap div:last-child').forEach(d => d.style.display = 'none');
+  document.querySelectorAll('.comb-dd-wrap .dd-menu').forEach(d => d.style.display = 'none');
 });
 
 function setView(v) {
