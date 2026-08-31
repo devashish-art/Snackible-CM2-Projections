@@ -1066,9 +1066,7 @@ function renderCombined() {
 }
 
 function toggleCombMonth(m) {
-  if (!window._combSel) window._combSel = new Set();
-  if (window._combSel.has(m)) window._combSel.delete(m);
-  else window._combSel.add(m);
+  window._combSel = new Set([m]);
   renderCombined();
 }
 
