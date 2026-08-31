@@ -945,9 +945,16 @@ function renderCombined() {
     return;
   }
 
-  if (!window._combSel) window._combSel = new Set([savedMonths[savedMonths.length-1]]);
+  if (!window._combSel) {
+    // Default: prefer the most recent month's Base Case, else first saved
+    const baseKey = savedMonths.find(vk => (savedProjections[vk].label||'').toLowerCase().includes('base'));
+    window._combSel = new Set([baseKey || savedMonths[0]]);
+  }
   [...window._combSel].forEach(m => { if (!savedProjections[m]) window._combSel.delete(m); });
-  if (!window._combSel.size) window._combSel = new Set([savedMonths[savedMonths.length-1]]);
+  if (!window._combSel.size) {
+    const baseKey = savedMonths.find(vk => (savedProjections[vk].label||'').toLowerCase().includes('base'));
+    window._combSel = new Set([baseKey || savedMonths[0]]);
+  }
 
   const monthGroups = {};
   savedMonths.forEach(vk => {
@@ -964,7 +971,7 @@ function renderCombined() {
       const isSel = window._combSel.has(vk);
       return `<div onclick="toggleCombMonth('${vk}')" style="padding:9px 16px;cursor:pointer;font-size:12px;font-weight:600;color:${isSel?'var(--green)':'var(--tx2)'};background:${isSel?'rgba(2,81,79,.06)':'#fff'};border-bottom:1px solid var(--border);">${lbl}</div>`;
     }).join('');
-    return `<div style="position:relative;display:inline-block;" class="comb-dd-wrap"><div onclick="event.stopPropagation();document.querySelectorAll('.comb-dd-wrap .dd-menu').forEach(d=>d.style.display='none');this.nextElementSibling.style.display=this.nextElementSibling.style.display==='block'?'none':'block'" style="padding:6px 16px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;border:1.5px solid ${isActive?'var(--green)':'var(--border)'};color:${isActive?'var(--green)':'var(--tx2)'};background:#fff;user-select:none;display:flex;align-items:center;gap:6px;">${month} Projection <span style="font-size:10px;">&#9660;</span></div><div class="dd-menu" style="display:none;position:absolute;top:110%;left:0;z-index:99;background:#fff;border:1.5px solid var(--border);border-radius:10px;overflow:hidden;min-width:170px;box-shadow:0 4px 16px rgba(0,0,0,.10);">${options}</div></div>`;
+    return `<div style="position:relative;display:inline-block;" class="comb-dd-wrap"><div onclick="event.stopPropagation();document.querySelectorAll('.comb-dd-wrap .dd-menu').forEach(d=>d.style.display='none');this.nextElementSibling.style.display=this.nextElementSibling.style.display==='block'?'none':'block'" style="padding:6px 16px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;border:1.5px solid ${isActive?'var(--green)':'var(--border)'};color:${isActive?'var(--green)':'var(--tx2)'};background:#fff;user-select:none;display:inline-flex;align-items:center;gap:6px;">${month} Projection &#9660;</div><div class="dd-menu" style="display:none;position:absolute;top:110%;left:0;z-index:99;background:#fff;border:1.5px solid var(--border);border-radius:10px;overflow:hidden;min-width:170px;box-shadow:0 4px 16px rgba(0,0,0,.10);">${options}</div></div>`;
   }).join('');
 
   const selMonths = [...window._combSel];
