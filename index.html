@@ -694,33 +694,16 @@ async function loadSaved() {
     try { savedProjections = JSON.parse(localStorage.getItem(SAVED_STORE)||'{}'); } catch(e2) {}
   }
 }
-async function writeSaved() {
-  try {
-    const saves = [];
-    Object.keys(savedProjections).forEach(versionKey => {
-      const proj = savedProjections[versionKey];
-      Object.keys(proj.portals || {}).forEach(portal => {
-        const safeKey = (versionKey + '_' + portal).replace(/[^a-zA-Z0-9]/g, '_');
-        const chunkKey = 'cm2_chunk_proj_' + safeKey;
-        const snap = proj.portals[portal];
-        // Support both pre-aggregated (ns,cm2) and skus-array format
-        let ps;
-        if (snap.ns !== undefined) {
-          ps = { gmv:snap.gmv||0, ns:snap.ns||0, cogs:snap.cogs||0, de:snap.de||0, gm:snap.gm||0, lab:snap.lab||0, log:snap.log||0, cm1:snap.cm1||0, promos:snap.promos||0, ads:snap.ads||0, cm2:snap.cm2||0 };
-        } else {
-          const skus = snap.skus || [];
-          ps = { gmv:0, ns:0, cogs:0, de:0, gm:0, lab:0, log:0, cm1:0, promos:0, ads:0, cm2:0 };
-          skus.forEach(s => { ps.ns+=+s.netSales||0; ps.cogs+=+s.cogs||0; ps.de+=+s.directExp||0; ps.gm+=+s.grossMargin||0; ps.lab+=+s.labour||0; ps.log+=+s.logistics||0; ps.cm1+=+s.cm1||0; ps.promos+=+s.promos||0; ps.ads+=+s.adsVis||0; ps.cm2+=+s.cm2||0; });
-        }
-        const chunkData = { month: proj.month, label: proj.label, savedAt: proj.savedAt, portal, portalSnap: ps };
-        const payload = encodeURIComponent(JSON.stringify(chunkData));
-        saves.push(fetch(SHEET_URL + '?action=saveChunk&chunkKey=' + encodeURIComponent(chunkKey) + '&payload=' + payload, { cache: 'no-store' }));
-      });
-    });
-    await Promise.all(saves);
-  } catch(e) {
-    try { localStorage.setItem(SAVED_STORE, JSON.stringify(savedProjections)); } catch(e2) {}
-  }
+// Saves one portal of one version. POST carries the SKU rows, which are too long for a URL.
+async function writeSavedPortal(versionKey, portal) {
+  const proj = savedProjections[versionKey];
+  const safeKey = (versionKey + '_' + portal).replace(/[^a-zA-Z0-9]/g, '_');
+  const chunkKey = 'cm2_chunk_proj_' + safeKey;
+  const chunkData = { month: proj.month, label: proj.label, savedAt: proj.savedAt, portal, portalSnap: proj.portals[portal] };
+  const body = JSON.stringify({ action:'saveChunk', chunkKey, payload: JSON.stringify(chunkData) });
+  const res = await fetch(SHEET_URL, { method:'POST', headers:{ 'Content-Type':'text/plain;charset=utf-8' }, body });
+  const j = await res.json();
+  if (!res.ok || j.error) throw new Error(j.error || ('HTTP ' + res.status));
 }
 
 function saveProjection() {
@@ -744,9 +727,10 @@ function saveProjection() {
   let _regNS=0, _nlcGMV=0;
   const projRows = skus.map(base => {
     const proj = projectSKU(base, p, totalProjNS);
-    if (base.isNLC) _nlcGMV += (getNLCMRP(base.name)||base.nlcPrice||0)*proj.qty;
-    else _regNS += proj.netSales;
-    return { name: base.name, isNLC: base.isNLC, ...proj, basePeriod: [...selectedMonths[p]].join(', ') };
+    let gmv;
+    if (base.isNLC) { gmv = (getNLCMRP(base.name)||base.nlcPrice||0)*proj.qty; _nlcGMV += gmv; }
+    else { _regNS += proj.netSales; gmv = proj.netSales*(1+_tax)/(1-_comm); }
+    return { name: base.name, isNLC: !!base.isNLC, gmv, ...proj, basePeriod: [...selectedMonths[p]].join(', ') };
   });
   const _portalGMV = _regNS*(1+_tax)/(1-_comm) + _nlcGMV;
   const portalSnap = {
@@ -772,7 +756,9 @@ function saveProjection() {
   const isEdit = !!savedProjections[versionKey].portals[p];
   savedProjections[versionKey].portals[p] = portalSnap;
   savedProjections[versionKey].savedAt = new Date().toISOString();
-  writeSaved().then(() => toast((isEdit?'✏️ Updated':'✅ Saved')+' '+PORTAL_MAP[p]+' · '+projMonth+' · '+label));
+  writeSavedPortal(versionKey, p)
+    .then(() => toast((isEdit?'✏️ Updated':'✅ Saved')+' '+PORTAL_MAP[p]+' · '+projMonth+' · '+label))
+    .catch(e => toast('Not saved: '+e.message,'err'));
 }
 
 async function deleteProjection(month) {
@@ -790,7 +776,8 @@ async function deleteProjection(month) {
     }));
   }
   delete savedProjections[month];
-  writeSaved().then(() => { renderSaved(); toast('Deleted '+month); });
+  renderSaved();
+  toast('Deleted '+month);
 }
 
 function renderSaved() {
@@ -858,13 +845,25 @@ function renderSavedMonthDetail(m) {
   if (!entry) return '';
   const pKeys = Object.keys(entry.portals);
 
-  return pKeys.map(p => {
+  return '<div onclick="event.stopPropagation()" style="cursor:default">'+pKeys.map(p => {
     const pd = entry.portals[p];
     // Handle both old format (array) and new format ({skus, gmv, ns, cm2})
     const skuList = Array.isArray(pd) ? pd : pd?.skus;
-    if (!skuList?.length) return '';
-    const pdObj = Array.isArray(pd) ? {skus: pd} : pd;
     const badge = {blinkit:'<span class="pbadge blinkit">🟡 Blinkit</span>',zepto:'<span class="pbadge zepto">🟠 Zepto</span>',instamart:'<span class="pbadge instamart">🔵 Instamart</span>'}[p];
+    if (!skuList?.length) {
+      const ns = +pd?.ns||0, cm1 = +pd?.cm1||0, cm2 = +pd?.cm2||0;
+      const cm1p = ns>0?cm1/ns*100:0, cm2p = ns>0?cm2/ns*100:0;
+      return `<div style="margin-top:16px">
+        <div style="margin-bottom:8px">${badge} <span style="font-size:11px;color:var(--tx3)">Portal totals only. Re-pull and re-save to see SKUs.</span></div>
+        <div class="twrap"><table>
+          <thead><tr><th class="r">GMV</th><th class="r">Net Sales</th><th class="r">COGS</th><th class="r">Direct Exp</th><th class="r">Gross Margin</th><th class="r">Labour</th><th class="r">Logistics</th><th class="r">CM1 ₹</th><th class="r">CM1%</th><th class="r">Promos</th><th class="r">Ads+Vis</th><th class="r">CM2 ₹</th><th class="r">CM2%</th></tr></thead>
+          <tbody><tr>
+            <td class="r">₹${fmt(pd?.gmv||0)}</td><td class="r">₹${fmt(ns)}</td><td class="r">₹${fmt(pd?.cogs||0)}</td><td class="r">₹${fmt(pd?.de||0)}</td><td class="r">₹${fmt(pd?.gm||0)}</td><td class="r">₹${fmt(pd?.lab||0)}</td><td class="r">₹${fmt(pd?.log||0)}</td><td class="r">₹${fmt(cm1)}</td>
+            <td class="r"><span class="pill ${pc(cm1p)}">${fmtPct(cm1p)}</span></td><td class="r">₹${fmt(pd?.promos||0)}</td><td class="r">₹${fmt(pd?.ads||0)}</td><td class="r">₹${fmt(cm2)}</td><td class="r"><span class="pill ${pc(cm2p)}">${fmtPct(cm2p)}</span></td>
+          </tr></tbody>
+        </table></div>
+      </div>`;
+    }
     const rows = skuList.map(s => {
       const nlcTag = s.isNLC ? '<span class="ntag">NLC</span>' : '';
       const cm2p = s.netSales>0?s.cm2/s.netSales*100:0;
@@ -928,7 +927,7 @@ function renderSavedMonthDetail(m) {
         </tr></tfoot>
       </table></div>
     </div>`;
-  }).join('');
+  }).join('')+'</div>';
 }
 
 /* ── Combined View — reads from savedProjections only ─── */
