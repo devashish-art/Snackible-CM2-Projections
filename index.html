@@ -121,10 +121,6 @@ tr.gt td{background:#EBF5F5;font-weight:700;border-top:2px solid var(--mint)}
           <label>Projection Month</label>
           <select id="save-month" style="padding:6px 9px;border:1.5px solid var(--border);border-radius:6px;font-family:'Poppins',sans-serif;font-size:12px;width:150px">
             <option value="">— Select month —</option>
-            <option>April 2026</option><option>May 2026</option><option>June 2026</option>
-            <option>July 2026</option><option>August 2026</option><option>September 2026</option>
-            <option>October 2026</option><option>November 2026</option><option>December 2026</option>
-            <option>January 2027</option><option>February 2027</option><option>March 2027</option>
           </select>
         </div>
         <div class="aitem" id="save-label-wrap">
@@ -143,12 +139,6 @@ tr.gt td{background:#EBF5F5;font-weight:700;border-top:2px solid var(--mint)}
           <label>Month</label>
           <select id="pull-month" style="padding:6px 9px;border:1.5px solid var(--border);border-radius:6px;font-family:'Poppins',sans-serif;font-size:12px;width:150px">
             <option value="">— Select month —</option>
-            <option>April 2025</option><option>May 2025</option><option>June 2025</option>
-            <option>July 2025</option><option>August 2025</option><option>September 2025</option>
-            <option>October 2025</option><option>November 2025</option><option>December 2025</option>
-            <option>January 2026</option><option>February 2026</option><option>March 2026</option>
-            <option>April 2026</option><option>May 2026</option><option>June 2026</option>
-            <option>July 2026</option><option>August 2026</option><option>September 2026</option>
           </select>
         </div>
         <button class="btn btn-primary" onclick="pullData()">⬇ Pull Month</button>
@@ -242,6 +232,29 @@ let ov = {};
 let currentView = 'blinkit';
 
 const PORTALS = ['blinkit','zepto','instamart'];
+
+/* ── Month lists (built from today's date, nothing hardcoded) ── */
+const MNAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const monthIdx = m => { const [n,y] = String(m||'').split(' '); const i = MNAMES.indexOf(n); return i<0 ? 9e9 : (+y)*12+i; };
+function monthRange(fromY, fromM, toY, toM) { // inclusive, 0-based months
+  const out = []; let y = fromY, m = fromM;
+  while (y*12+m <= toY*12+toM) { out.push(MNAMES[m]+' '+y); m++; if (m>11) { m=0; y++; } }
+  return out;
+}
+function fillMonthSelects() {
+  const now = new Date(), cy = now.getFullYear(), cm = now.getMonth();
+  // Base months: April 2025 up to the current month (latest closed month preselected)
+  const pullList = monthRange(2025, 3, cy, cm);
+  // Projection months: April 2026 up to 12 months ahead
+  const end = new Date(cy, cm+12, 1);
+  const projList = monthRange(2026, 3, end.getFullYear(), end.getMonth());
+  const pm = document.getElementById('pull-month'), sm = document.getElementById('save-month');
+  pm.innerHTML = '<option value="">— Select month —</option>' + pullList.map(m=>'<option>'+m+'</option>').join('');
+  sm.innerHTML = '<option value="">— Select month —</option>' + projList.map(m=>'<option>'+m+'</option>').join('');
+  const lastClosed = pullList[pullList.length-2]; if (lastClosed) pm.value = lastClosed;
+  const nextM = projList.find(m => monthIdx(m) === cy*12+cm+1); if (nextM) sm.value = nextM;
+}
+fillMonthSelects();
 const PORTAL_MAP = { blinkit:'Blinkit', zepto:'Zepto', instamart:'Instamart' };
 const PORTAL_RMAP = { Blinkit:'blinkit', Zepto:'zepto', Instamart:'instamart' };
 const fmt    = n => Math.round(n).toLocaleString('en-IN');
@@ -783,9 +796,8 @@ async function deleteProjection(month) {
 function renderSaved() {
   const area = document.getElementById('saved-area');
   const vKeys = Object.keys(savedProjections).sort((a,b) => {
-    const ORDER = ['April 2026','May 2026','June 2026','July 2026','August 2026','September 2026','October 2026','November 2026','December 2026','January 2027','February 2027','March 2027'];
     const ea = savedProjections[a], eb = savedProjections[b];
-    const mo = ORDER.indexOf(ea.month) - ORDER.indexOf(eb.month);
+    const mo = monthIdx(ea.month) - monthIdx(eb.month);
     return mo !== 0 ? mo : (ea.label||'').localeCompare(eb.label||'');
   });
   if (!vKeys.length) {
@@ -935,8 +947,8 @@ function renderCombined() {
   const area = document.getElementById('combined-area');
 
   const savedMonths = Object.keys(savedProjections).sort((a,b)=>{ // vKeys sorted by month then label
-    const O=['April 2026','May 2026','June 2026','July 2026','August 2026','September 2026','October 2026','November 2026','December 2026','January 2027','February 2027','March 2027'];
-    return O.indexOf(a)-O.indexOf(b);
+    const ea = savedProjections[a], eb = savedProjections[b];
+    return (monthIdx(ea.month) - monthIdx(eb.month)) || (ea.label||'').localeCompare(eb.label||'');
   });
 
   if (!savedMonths.length) {
